@@ -1,2 +1,2 @@
 # lyric_scraper
-webscraper to pull lyrics from musical artists
+ webscraper to pull lyrics for a mucial artist
