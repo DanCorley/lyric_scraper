@@ -7,6 +7,16 @@ import requests, json, collections
 import numpy as np
 import pandas as pd
 import string
+from multiprocessing import Pool
+
+
+def load_database(file_name):
+    
+    '''
+    loading all saved/ loaded songs until S3 is implemented
+    '''
+    
+    return pd.read_pickle(file_name)
 
 class Artist:
     
@@ -31,9 +41,8 @@ class Artist:
         input: artist's name 
         output: 
         '''
-        
         # initialize the selenium driver and open the artist's page
-        driver = webdriver.Chrome('/Users/dcorley/Downloads/chromedriver')
+        driver = webdriver.Chrome('/Users/dcorley/Documents/Flatiron/Lyrics/lyric_scraper/chromedriver')
         driver.get(f'https://genius.com/artists/{self.name}')
 
         class_name = 'full_width_button.u-clickable.u-quarter_top_margin'
@@ -78,43 +87,70 @@ class Artist:
         
         zipped = zip(titles, year, album_links)
         columns = ['albums', 'release_year', 'links']
-        
         albums = pd.DataFrame(zipped, columns=columns)
         
         self.albums = albums
+    
+    
+    def get_track_list(self, link):
+        
+        '''
+        Return all tracks from an artist's album
+        To be used inside .get_songs() to return for all albums
+        
+        '''
+        
+        # helper fuction for clean track names
+        def song_names(string):
+            string = string.get_text()
+            string = string.split('\n')[2].strip()
+            return string
+        
+        # make request and create soup object
+        request = requests.get(link)
+        soup = BeautifulSoup(request.content, features='lxml')
+        
+        # find the album title
+        alb_text = 'header_with_cover_art-primary_info-title header_with_cover_art-primary_info-title--white'
+        album = soup.find('h1', class_=alb_text).get_text()
+        print(f'finding {album}')
+        
+        # find the list of songs in album
+        songs = soup.find_all('a', class_='u-display_block')
+        links = [song['href'] for song in songs]
+        names = [song_names(song) for song in songs]
+        zipped = zip(names, links)
+        
+        # create df containing names, links, and albums
+        columns = ['names', 'links']
+        new_df = pd.DataFrame(zipped, columns=columns)
+        new_df['album'] = album
+        return new_df
     
     
     def get_songs(self, end=None):
     
         '''
         input: dataframe of albums
-        output: dataframe of all sons
+        output: dataframe of all songs
         '''
-
-        # helper function to get all names of songs
-        def song_names(string):
-            string = string.get_text()
-            string = string.split('\n')[2].strip()
-            return string
+        if type(self.albums) != pd.DataFrame:
+            raise NotImplementedError('You need to run .get_albums first')
         
+        # create empty df
         df = pd.DataFrame()
         
-        for album in self.albums[:end].iterrows():
-            link = album[1].links
-            album = album[1].albums
-            print(album)
-            request = requests.get(link)
-            soup = BeautifulSoup(request.content, features='lxml')
-            songs = soup.find_all('a', class_='u-display_block')
-            
-            links = [song['href'] for song in songs]
-            names = [song_names(song) for song in songs]
-            zipped = zip(names, links)
-            
-            columns = ['names', 'links']
-            new_df = pd.DataFrame(zipped, columns=columns)
-            new_df['album'] = album
-            df = df.append(new_df, ignore_index=True)
+        # create list of the unique album names
+        iterable = self.albums.links[:end]
+        
+        # 
+        with Pool() as pool:
+            lst = pool.map(self.get_track_list, iterable=iterable)
+        pool.close()
+        
+        # create df 
+        for x in lst:
+            df = df.append(x)
 
         self.songs = df
         
