@@ -3,20 +3,13 @@ from selenium import webdriver
 from selenium.webdriver.common.keys import Keys
 from bs4 import BeautifulSoup
 from textblob import TextBlob
-import requests, json, collections
+import requests, json, collections, os
 import numpy as np
 import pandas as pd
 import string
 from multiprocessing import Pool
+import boto3
 
-
-def load_database(file_name):
-    
-    '''
-    loading all saved/ loaded songs until S3 is implemented
-    '''
-    
-    return pd.read_pickle(file_name)
 
 class Artist:
     
@@ -96,7 +89,7 @@ class Artist:
         
         '''
         Return all tracks from an artist's album
-        To be used inside .get_songs() to return for all albums
+        Optimally used inside .get_songs() to return for all albums
         
         '''
         
@@ -161,6 +154,9 @@ class Artist:
         params: alert = number of 
         output: dataframe containing info for all songs
         '''
+        if type(self.songs) != pd.DataFrame:
+            raise NotImplementedError('You need to run .get_songs first')
+        
         song_links = self.songs.links
 
         # to print out the retrieval % completion of songs
